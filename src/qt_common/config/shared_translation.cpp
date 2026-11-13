@@ -372,6 +372,10 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "it bypasses such prompts and directly exits the emulation."));
     INSERT(UISettings, hide_mouse, tr("Hide mouse on inactivity"),
            tr("Hides the mouse after 2.5s of inactivity."));
+    INSERT(UISettings, auto_docked_mode, tr("Pick docked or handheld mode from the controllers"),
+           tr("Each game starts in docked mode, or in handheld mode when its controller setup "
+              "connects only the handheld controller (which docked mode can't use).\nOverrides "
+              "the docked/handheld setting while the game runs; the setting itself is kept."));
     INSERT(UISettings, home_button_menu, tr("Home button opens the in-game menu"),
            tr("Pressing a controller's Home button on its own while a game runs pauses it and "
               "opens a menu with Settings and Exit Game.\nHome held with another button still "

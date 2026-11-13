@@ -457,6 +457,8 @@ private:
                            std::string_view gpu_vendor = {});
     void OnApplicationChanged(u64 program_id);
     void UpdateDockedButton();
+    /// Docked or handheld for the starting game, from its controllers
+    void ApplyAutoDockedMode();
     void UpdateAPIText();
     void UpdateFilterText();
     void UpdateAAText();

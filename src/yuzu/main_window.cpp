@@ -7618,6 +7618,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     // The game's own input profiles, else the default ones, read fresh from their files
     InputProfiles::ApplyGameProfiles(game_config_loaded);
     QtCommon::system->HIDCore().ReloadInputDevices();
+    ApplyAutoDockedMode();
     for (std::size_t i = 0; i < 9; ++i) {
         const auto& player = Settings::values.players.GetValue()[i];
         if (player.connected || i == 0) {
@@ -9451,6 +9452,39 @@ void MainWindow::OnTasRecord() {
 
 void MainWindow::OnTasReset() {
     input_subsystem->GetTas()->Reset();
+}
+
+void MainWindow::ApplyAutoDockedMode() {
+    if (!UISettings::values.auto_docked_mode.GetValue()) {
+        return;
+    }
+    static constexpr std::size_t HANDHELD_INDEX = 8;
+    const auto& players = Settings::values.players.GetValue();
+    bool handheld = players[HANDHELD_INDEX].connected;
+    bool other = false;
+    for (std::size_t i = 0; i < HANDHELD_INDEX; ++i) {
+        if (!players[i].connected) {
+            continue;
+        }
+        if (players[i].controller_type == Settings::ControllerType::Handheld) {
+            handheld = true;
+        } else {
+            other = true;
+        }
+    }
+    // Docked unless only the handheld controller is connected (docked mode can't use it)
+    const bool docked = other || !handheld;
+
+    // For this game only: the setting goes back to the saved one when the game stops
+    auto& mode = Settings::values.use_docked_mode;
+    if (mode.UsingGlobal()) {
+        mode.SetGlobal(false);
+    }
+    mode.SetValue(docked ? Settings::ConsoleMode::Docked : Settings::ConsoleMode::Handheld);
+    LOG_INFO(Frontend, "Console mode for this game: {} ({})", docked ? "docked" : "handheld",
+             other ? "a controller is connected"
+                   : (handheld ? "only the handheld controller" : "no controller"));
+    UpdateDockedButton();
 }
 
 void MainWindow::OnToggleDockedMode() {
