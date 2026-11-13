@@ -805,13 +805,6 @@ void EmulatedController::SetButton(const Common::Input::CallbackStatus& callback
         return;
     }
 
-    if (index == Settings::NativeButton::Home) {
-        LOG_INFO(Service_HID,
-                 "[HomeDiag] Home {} on controller {} (system buttons {}, configuring {})",
-                 current_status.value ? "down" : "up", static_cast<int>(npad_id_type),
-                 system_buttons_enabled.load() ? "on" : "off", is_configuring ? "yes" : "no");
-    }
-
     if (is_configuring) {
         controller.npad_button_state.raw = NpadButton::None;
         controller.debug_pad_button_state.raw = 0;

@@ -10,7 +10,6 @@
 #include <QStyle>
 #include <QVBoxLayout>
 
-#include "common/logging.h"
 #include "hid_core/frontend/emulated_controller.h"
 #include "hid_core/hid_core.h"
 #include "hid_core/hid_types.h"
@@ -48,7 +47,6 @@ HomeButtonWatcher::HomeButtonWatcher(Core::HID::HIDCore& hid_core, QObject* pare
         auto& entry = watched[i];
         entry.controller = hid_core.GetEmulatedControllerByIndex(i);
         if (entry.controller == nullptr) {
-            LOG_WARNING(Frontend, "[HomeDiag] Watcher: no controller at index {}", i);
             continue;
         }
         Core::HID::ControllerUpdateCallback callback{

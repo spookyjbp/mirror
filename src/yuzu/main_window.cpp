@@ -7621,14 +7621,6 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     InputProfiles::ApplyGameProfiles(game_config_loaded);
     QtCommon::system->HIDCore().ReloadInputDevices();
     ApplyAutoDockedMode();
-    for (std::size_t i = 0; i < 9; ++i) {
-        const auto& player = Settings::values.players.GetValue()[i];
-        if (player.connected || i == 0) {
-            LOG_INFO(Frontend, "[HomeDiag] Player {} connected {} Home mapping `{}`", i + 1,
-                     player.connected,
-                     player.buttons[Settings::NativeButton::Home]);
-        }
-    }
     if (game_config_loaded) {
         QtCommon::system->ApplySettings();
     }
@@ -8801,11 +8793,6 @@ QString MainWindow::HomeMenuGameName() const {
 }
 
 void MainWindow::OnHomeButton() {
-    LOG_INFO(Frontend,
-             "[HomeDiag] Home pressed: option {}, game running {}, menu {}, modal {}, active {}",
-             UISettings::values.home_button_menu.GetValue(), emulation_running,
-             home_menu != nullptr, QApplication::activeModalWidget() != nullptr,
-             QGuiApplication::applicationState() == Qt::ApplicationActive);
     if (!UISettings::values.home_button_menu.GetValue() || !emulation_running ||
         !QtCommon::emu_thread || QtCommon::system->IsShuttingDown() || home_menu_resuming) {
         return;
