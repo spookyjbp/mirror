@@ -1292,6 +1292,8 @@ void ConfigureInputPlayer::BuildProfileCard() {
     // The engine owns the mappings here: picking or saving a profile goes through it
     connect(card_profiles, qOverload<int>(&QComboBox::activated), this, [this](int index) {
         ui->comboProfiles->setCurrentIndex(index);
+        // Shows the profile's mappings now (the engine puts it on the controller next tick)
+        LoadProfile();
         RequestProfile(player_index, ui->comboProfiles->currentText());
         RememberProfileMapping();
         UpdateProfileCard();
@@ -1363,6 +1365,9 @@ void ConfigureInputPlayer::UpdateProfileCard() {
         ui->comboProfiles->setCurrentIndex(ui->comboProfiles->findText(carried));
         ui->comboProfiles->blockSignals(blocked);
         card_profiles->setCurrentIndex(ui->comboProfiles->currentIndex());
+        // The engine put on (or took off) a profile: show the mappings it left
+        emulated_controller->ReloadFromSettings();
+        UpdateUI();
     }
     const QString name = ui->comboProfiles->currentText();
     if (ui->comboProfiles->currentIndex() >= 0 && name != card_profile_name) {

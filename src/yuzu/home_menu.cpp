@@ -10,6 +10,7 @@
 #include <QStyle>
 #include <QVBoxLayout>
 
+#include "common/logging.h"
 #include "hid_core/frontend/emulated_controller.h"
 #include "hid_core/hid_core.h"
 #include "hid_core/hid_types.h"
@@ -47,6 +48,7 @@ HomeButtonWatcher::HomeButtonWatcher(Core::HID::HIDCore& hid_core, QObject* pare
         auto& entry = watched[i];
         entry.controller = hid_core.GetEmulatedControllerByIndex(i);
         if (entry.controller == nullptr) {
+            LOG_WARNING(Frontend, "[HomeDiag] Watcher: no controller at index {}", i);
             continue;
         }
         Core::HID::ControllerUpdateCallback callback{
@@ -82,11 +84,15 @@ void HomeButtonWatcher::OnControllerUpdate(std::size_t index,
         if (home && !entry.held) {
             entry.held = true;
             entry.combo = others;
+            LOG_INFO(Frontend, "[HomeDiag] Watcher: Home down on index {}{}", index,
+                     others ? " (another button already held)" : "");
         } else if (home) {
             entry.combo = entry.combo || others;
         } else if (entry.held) {
             entry.held = false;
             released_alone = !entry.combo;
+            LOG_INFO(Frontend, "[HomeDiag] Watcher: Home up on index {} ({})", index,
+                     released_alone ? "alone: opening the menu" : "with another button: hotkey");
         }
     }
     if (released_alone) {
