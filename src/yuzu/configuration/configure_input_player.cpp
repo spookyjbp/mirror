@@ -2312,6 +2312,27 @@ void ConfigureInputPlayer::LoadProfile() {
         KeepSdlDevice(player, *device);
     }
 
+    if (player_index == 0) {
+        // Player 1's tab shows the handheld controller while the type is Handheld: the profile
+        // goes on the controller its type uses, and the tab switches to it as a type change does
+        static constexpr std::size_t HANDHELD_INDEX = 8;
+        auto& players = Settings::values.players.GetValue();
+        if (player.controller_type == Settings::ControllerType::Handheld) {
+            auto& handheld = players[HANDHELD_INDEX];
+            handheld.controller_type = Settings::ControllerType::Handheld;
+            handheld.buttons = player.buttons;
+            handheld.analogs = player.analogs;
+            handheld.motions = player.motions;
+        }
+        hid_core.GetEmulatedController(Core::HID::NpadIdType::Player1)->ReloadFromSettings();
+        hid_core.GetEmulatedController(Core::HID::NpadIdType::Handheld)->ReloadFromSettings();
+        const int type_index = GetIndexFromControllerType(
+            Core::HID::EmulatedController::MapSettingsTypeToNPad(player.controller_type));
+        if (type_index >= 0) {
+            ui->comboControllerType->setCurrentIndex(type_index);
+        }
+    }
+
     LoadConfiguration();
 }
 
