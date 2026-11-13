@@ -39,12 +39,13 @@ private:
         Core::HID::EmulatedController* controller = nullptr;
         int callback_key = 0;
         bool held = false;
-        bool combo = false;
     };
 
     void OnControllerUpdate(std::size_t index, Core::HID::ControllerTriggerType type);
 
     std::vector<Watched> watched;
+    /// Another button was held during the current press (a hotkey, not the menu)
+    bool combo = false;
     std::mutex mutex;
 };
 

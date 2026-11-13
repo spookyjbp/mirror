@@ -76,23 +76,27 @@ void HomeButtonWatcher::OnControllerUpdate(std::size_t index,
     }
     bool released_alone = false;
     {
+        // One controller can feed several players (the same pad mapped on each): a press is
+        // from the first Home down on any of them to the last Home up, one press however many
         std::scoped_lock lock{mutex};
         auto& entry = watched[index];
         const bool home = entry.controller->GetHomeButtons().home != 0;
-        const bool others = (static_cast<u64>(entry.controller->GetNpadButtons().raw) & COMBO_BUTTONS) != 0 ||
-                            entry.controller->GetCaptureButtons().capture != 0;
-        if (home && !entry.held) {
-            entry.held = true;
-            entry.combo = others;
-            LOG_INFO(Frontend, "[HomeDiag] Watcher: Home down on index {}{}", index,
-                     others ? " (another button already held)" : "");
-        } else if (home) {
-            entry.combo = entry.combo || others;
-        } else if (entry.held) {
-            entry.held = false;
-            released_alone = !entry.combo;
-            LOG_INFO(Frontend, "[HomeDiag] Watcher: Home up on index {} ({})", index,
-                     released_alone ? "alone: opening the menu" : "with another button: hotkey");
+        const bool others =
+            (static_cast<u64>(entry.controller->GetNpadButtons().raw) & COMBO_BUTTONS) != 0 ||
+            entry.controller->GetCaptureButtons().capture != 0;
+        const auto any_held = [this] {
+            return std::any_of(watched.begin(), watched.end(),
+                               [](const Watched& w) { return w.held; });
+        };
+        const bool was_pressing = any_held();
+        entry.held = home;
+        if (!was_pressing && home) {
+            combo = others;
+        } else if (was_pressing) {
+            combo = combo || others;
+        }
+        if (was_pressing && !any_held()) {
+            released_alone = !combo;
         }
     }
     if (released_alone) {

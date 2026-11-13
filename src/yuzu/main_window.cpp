@@ -1692,6 +1692,8 @@ void MainWindow::LinkActionShortcut(QAction* action, const QString& action_name,
         QtCommon::system->HIDCore().GetEmulatedController(Core::HID::NpadIdType::Player1);
     const auto* controller_hotkey =
         hotkey_registry.GetControllerHotkey(main_window, action_name.toStdString(), controller);
+    // Hotkeys are linked again after each Configure: one connection, or the action runs twice
+    disconnect(controller_hotkey, &ControllerShortcut::Activated, this, nullptr);
     connect(
         controller_hotkey, &ControllerShortcut::Activated, this,
         [action, tas_allowed, this] {
