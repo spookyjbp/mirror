@@ -1,42 +1,76 @@
 name: Build Eden for Windows
 
+# Matches Eden's official Windows CI (Eden-CI/Workflow): clang-cl in the MSVC
+# environment, bundled static Qt, and an sccache compile cache so rebuilds after
+# small changes only recompile what changed.
 # Run it from the Actions tab (Run workflow), or push to this branch.
 on:
   workflow_dispatch:
   push:
     branches: [mod-home-profiles]
 
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
 jobs:
   windows:
-    runs-on: windows-2022
+    runs-on: windows-latest
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up MSVC
+        uses: Eden-CI/msvc-dev-cmd@master
+        with:
+          arch: amd64
+
+      - name: Install LLVM/Clang
+        uses: Nerixyz/install-llvm-action@feat/new-llvm-versions
+        with:
+          version: "22.1.4"
+          env: true
+
+      - name: Put clang-cl on PATH
+        shell: bash
+        run: |
+          echo "${LLVM_PATH}/bin" >> $GITHUB_PATH
+          "${LLVM_PATH}/bin/clang-cl" --version
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Install Vulkan SDK
-        shell: pwsh
+        shell: powershell
         run: .\tools\windows\install-vulkan-sdk.ps1
 
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Install CMake and Ninja
-        shell: pwsh
-        run: python -m pip install --upgrade "cmake>=3.31" ninja
-
       - name: Configure
-        shell: pwsh
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DYUZU_TESTS=OFF -DENABLE_UPDATE_CHECKER=OFF
+        shell: bash
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+          -DBUILD_TESTING=OFF -DYUZU_TESTS=OFF
+          -DYUZU_USE_BUNDLED_QT=ON -DYUZU_STATIC_BUILD=ON
+          -DYUZU_USE_BUNDLED_FFMPEG=ON -DYUZU_USE_BUNDLED_OPENSSL=ON
+          -DYUZU_USE_BUNDLED_SIRIT=ON -DYUZU_DISABLE_LLVM=ON
+          -DENABLE_LTO=OFF -DENABLE_UPDATE_CHECKER=OFF
+          -DYUZU_CMD=OFF -DYUZU_ROOM_STANDALONE=OFF
+          -DUSE_CCACHE=ON -DCCACHE_PATH="${SCCACHE_PATH}"
 
       - name: Build
-        shell: pwsh
+        shell: bash
         run: cmake --build build
+
+      - name: Collect
+        shell: bash
+        run: |
+          mkdir -p artifact
+          cp build/bin/*.exe artifact/
+          cp LICENSE* README* artifact/ || true
 
       - name: Upload Eden
         uses: actions/upload-artifact@v4
         with:
           name: Eden-Windows-x64-home-menu-profiles
-          path: build/bin/
+          path: artifact/
           if-no-files-found: error
