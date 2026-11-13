@@ -526,6 +526,7 @@ void GameList::AddGamePopup(QMenu& context_menu, u64 program_id, const std::stri
 #endif
     context_menu.addSeparator();
     QAction* properties = context_menu.addAction(tr("Configure Game"));
+    QAction* controller_profile = context_menu.addAction(tr("Controller Profile..."));
 
     favorite->setVisible(program_id != 0);
     favorite->setCheckable(true);
@@ -609,6 +610,8 @@ void GameList::AddGamePopup(QMenu& context_menu, u64 program_id, const std::stri
 #endif
     connect(properties, &QAction::triggered, this,
             [this, path]() { emit OpenPerGameGeneralRequested(path); });
+    connect(controller_profile, &QAction::triggered, this,
+            [this, path]() { emit OpenPerGameInputRequested(path); });
 
     connect(ryujinx, &QAction::triggered, this,
             [this, program_id]() { emit LinkToRyujinxRequested(program_id); });

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2022 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
+
 #include "common/settings.h"
 #include "core/core.h"
 #include "frontend_common/config.h"
@@ -27,12 +29,21 @@ ConfigureInputPerGame::ConfigureInputPerGame(Core::System& system_, QtConfig* co
     Settings::values.players.SetGlobal(false);
 
     const auto& profile_names = profiles->GetInputProfileNames();
-    const auto populate_profiles = [this, &profile_names](size_t player_index) {
+    const auto default_profiles = InputProfiles::GetDefaultProfiles();
+    const auto populate_profiles = [this, &profile_names, &default_profiles](size_t player_index) {
         const auto previous_profile =
             Settings::values.players.GetValue()[player_index].profile_name;
 
         auto* const player_combobox = profile_comboboxes[player_index];
-        player_combobox->addItem(tr("Use global input configuration"));
+        const auto& default_profile = default_profiles[player_index];
+        if (!default_profile.empty() &&
+            std::find(profile_names.begin(), profile_names.end(), default_profile) !=
+                profile_names.end()) {
+            player_combobox->addItem(
+                tr("Use default profile (%1)").arg(QString::fromStdString(default_profile)));
+        } else {
+            player_combobox->addItem(tr("Use global input configuration"));
+        }
 
         for (size_t index = 0; index < profile_names.size(); ++index) {
             const auto& profile_name = profile_names[index];

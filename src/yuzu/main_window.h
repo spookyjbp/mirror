@@ -67,6 +67,8 @@ class QSlider;
 class QHBoxLayout;
 class WaitTreeWidget;
 class PerformanceOverlay;
+class HomeButtonWatcher;
+class HomeMenu;
 #ifdef HAS_RESHADE
 class ConfigurePostProcessing;
 #endif
@@ -469,7 +471,24 @@ private:
     void ShowMouseCursor();
     void OpenURL(const QUrl& url);
     void LoadTranslation();
-    void OpenPerGameConfiguration(u64 title_id, const std::string& file_name);
+    void OpenPerGameConfiguration(u64 title_id, const std::string& file_name,
+                                  bool input_profiles_tab = false);
+    void OnGameListOpenPerGameInput(const std::string& file);
+    void OnConfigureDefaultProfiles();
+
+    /// The Home button's in-game menu
+    void OnHomeButton();
+    void OnHomeMenuChoice(int choice);
+    void CloseHomeMenu(bool resume);
+    QString HomeMenuGameName() const;
+    HomeButtonWatcher* home_watcher = nullptr;
+    HomeMenu* home_menu = nullptr;
+    /// The game was running when the menu opened (resume it on close)
+    bool home_menu_resume = false;
+    /// Waiting for the buttons to be let go before resuming
+    bool home_menu_resuming = false;
+    /// Stops the game without asking (the caller asked)
+    void StopGameConfirmed();
     bool CheckFirmwarePresence();
     void SetFirmwareVersion();
     void SetFPSSuffix();

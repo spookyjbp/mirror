@@ -45,6 +45,7 @@
 #include "set_play_time_dialog.h"
 #include "util/util.h"
 #include "yuzu/game/game_list.h"
+#include "yuzu/home_menu.h"
 #include "yuzu/overlay_panel.h"
 
 #include "applets/qt_amiibo_settings.h"
@@ -54,6 +55,7 @@
 #include "applets/qt_software_keyboard.h"
 #include "applets/qt_web_browser.h"
 
+#include "configuration/configure_default_profiles.h"
 #include "configuration/configure_dialog.h"
 #include "configuration/configure_input.h"
 #include "configuration/configure_per_game.h"
@@ -843,6 +845,11 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     ConnectWidgetEvents();
 
     QtCommon::SetupHID();
+
+    home_watcher = new HomeButtonWatcher(QtCommon::system->HIDCore(), this);
+    connect(home_watcher, &HomeButtonWatcher::HomePressed, this, &MainWindow::OnHomeButton,
+            Qt::QueuedConnection);
+
     controller_dialog->refreshConfiguration();
 
     UpdateWindowTitle();
@@ -1891,6 +1898,8 @@ void MainWindow::ConnectWidgetEvents() {
 
     connect(game_list, &GameList::OpenPerGameGeneralRequested, this,
             &MainWindow::OnGameListOpenPerGameProperties);
+    connect(game_list, &GameList::OpenPerGameInputRequested, this,
+            &MainWindow::OnGameListOpenPerGameInput);
     connect(game_list, &GameList::LinkToRyujinxRequested, this, &MainWindow::OnLinkToRyujinx);
 
     connect(this, &MainWindow::UpdateInstallProgress, this, &MainWindow::IncrementInstallProgress);
@@ -3031,8 +3040,12 @@ std::array<Settings::PlayerInput, 10> ModernStartSets(
 } // Anonymous namespace
 
 void MainWindow::SaveAllConfigValues() {
+    // Saving writes the user's own players and switches to them: a running game keeps its own
+    // (its input profiles)
+    const bool players_global = Settings::values.players.UsingGlobal();
     if (!console_profile) {
         config->SaveAllValues();
+        Settings::values.players.SetGlobal(players_global);
         return;
     }
     // A console mode drives the players at runtime; the file keeps the user's own
@@ -3040,6 +3053,7 @@ void MainWindow::SaveAllConfigValues() {
     std::swap(players, *console_profile);
     config->SaveAllValues();
     std::swap(players, *console_profile);
+    Settings::values.players.SetGlobal(players_global);
 }
 
 namespace {
@@ -7169,6 +7183,7 @@ void MainWindow::ConnectMenuEvents() {
     connect_menu(ui->action_Restart, &MainWindow::OnRestartGame);
     connect_menu(ui->action_Configure, &MainWindow::OnConfigure);
     connect_menu(ui->action_Configure_Current_Game, &MainWindow::OnConfigurePerGame);
+    connect_menu(ui->action_Default_Controller_Profiles, &MainWindow::OnConfigureDefaultProfiles);
 
     // View
     connect_menu(ui->action_Fullscreen, &MainWindow::ToggleFullscreen);
@@ -7588,6 +7603,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     const auto loader =
         Loader::GetLoader(*QtCommon::system, v_file, params.program_id, params.program_index);
 
+    bool game_config_loaded = false;
     if (loader != nullptr && loader->ReadProgramId(title_id) == Loader::ResultStatus::Success &&
         type == StartGameType::Normal) {
         // Load per game settings
@@ -7597,7 +7613,12 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
                                           ? Common::FS::PathToUTF8String(file_path.filename())
                                           : fmt::format("{:016X}", title_id);
         QtConfig per_game_config(config_file_name, Config::ConfigType::PerGameConfig);
-        QtCommon::system->HIDCore().ReloadInputDevices();
+        game_config_loaded = true;
+    }
+    // The game's own input profiles, else the default ones, read fresh from their files
+    InputProfiles::ApplyGameProfiles(game_config_loaded);
+    QtCommon::system->HIDCore().ReloadInputDevices();
+    if (game_config_loaded) {
         QtCommon::system->ApplySettings();
     }
 
@@ -7817,6 +7838,7 @@ void MainWindow::OnEmulationStopped() {
     }
 
     emulation_running = false;
+    CloseHomeMenu(false);
 
     discord_rpc->Update();
     Common::FeralGamemode::Stop();
@@ -7874,6 +7896,8 @@ void MainWindow::OnEmulationStopped() {
     game_list->setEnabled(true);
 
     Settings::RestoreGlobalState(QtCommon::system->IsPoweredOn());
+    // The game's players (its input profiles) end with it
+    Settings::values.players.SetGlobal(true);
     QtCommon::system->HIDCore().ReloadInputDevices();
     UpdateStatusButtons();
 }
@@ -8381,6 +8405,30 @@ void MainWindow::OnGameListOpenPerGameProperties(const std::string& file) {
     OpenPerGameConfiguration(title_id, file);
 }
 
+void MainWindow::OnGameListOpenPerGameInput(const std::string& file) {
+    u64 title_id{};
+    const auto v_file = Core::GetGameFileFromPath(QtCommon::vfs, file);
+    const auto loader = Loader::GetLoader(*QtCommon::system, v_file);
+
+    if (loader == nullptr || loader->ReadProgramId(title_id) != Loader::ResultStatus::Success) {
+        QMessageBox::information(this, tr("Properties"),
+                                 tr("The game properties could not be loaded."));
+        return;
+    }
+
+    OpenPerGameConfiguration(title_id, file, true);
+}
+
+void MainWindow::OnConfigureDefaultProfiles() {
+    ConfigureDefaultProfiles dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    dialog.ApplyConfiguration();
+    // (A running game keeps its players until its next start)
+    SaveAllConfigValues();
+}
+
 void MainWindow::OnLinkToRyujinx(const u64& program_id) {
     namespace fs = std::filesystem;
 
@@ -8718,15 +8766,125 @@ void MainWindow::OnPauseContinueGame() {
 
 void MainWindow::OnStopGame() {
     if (ConfirmShutdownGame()) {
-        play_time_manager->Stop();
-        // Update game list to show new play time
-        game_list->PopulateAsync(UISettings::values.game_dirs);
-        if (OnShutdownBegin()) {
-            OnShutdownBeginDialog();
-        } else {
-            OnEmulationStopped();
-        }
+        StopGameConfirmed();
     }
+}
+
+void MainWindow::StopGameConfirmed() {
+    play_time_manager->Stop();
+    // Update game list to show new play time
+    game_list->PopulateAsync(UISettings::values.game_dirs);
+    if (OnShutdownBegin()) {
+        OnShutdownBeginDialog();
+    } else {
+        OnEmulationStopped();
+    }
+}
+
+QString MainWindow::HomeMenuGameName() const {
+    std::string name;
+    if (QtCommon::system->GetGameName(name) != Loader::ResultStatus::Success) {
+        return {};
+    }
+    return QString::fromStdString(name);
+}
+
+void MainWindow::OnHomeButton() {
+    if (!UISettings::values.home_button_menu.GetValue() || !emulation_running ||
+        !QtCommon::emu_thread || QtCommon::system->IsShuttingDown() || home_menu_resuming) {
+        return;
+    }
+    if (home_menu != nullptr) {
+        // (Hidden while Settings is open from it)
+        if (home_menu->isVisible()) {
+            home_menu->HomeButton();
+        }
+        return;
+    }
+    // Leave dialogs (applets, settings) and other apps alone
+    if (QApplication::activeModalWidget() != nullptr ||
+        QGuiApplication::applicationState() != Qt::ApplicationActive) {
+        return;
+    }
+    const auto [tas_status, current_tas_frame, total_tas_frames] =
+        input_subsystem->GetTas()->GetStatus();
+    if (tas_status != InputCommon::TasInput::TasState::Stopped) {
+        return;
+    }
+
+    home_menu_resume = QtCommon::emu_thread->IsRunning();
+    if (home_menu_resume) {
+        OnPauseGame();
+    }
+    QWidget* over = render_window->isVisible() ? static_cast<QWidget*>(render_window) : this;
+    home_menu = new HomeMenu(over->window(), QtCommon::system->HIDCore());
+    connect(home_menu, &HomeMenu::Chosen, this,
+            [this](HomeMenu::Choice choice) { OnHomeMenuChoice(static_cast<int>(choice)); });
+    home_menu->Open(over, HomeMenuGameName(), QtCommon::system->GetExitLocked());
+}
+
+void MainWindow::OnHomeMenuChoice(int choice) {
+    if (home_menu == nullptr) {
+        return;
+    }
+    switch (static_cast<HomeMenu::Choice>(choice)) {
+    case HomeMenu::Choice::Resume:
+        CloseHomeMenu(true);
+        break;
+    case HomeMenu::Choice::GameSettings:
+    case HomeMenu::Choice::Settings: {
+        home_menu->hide();
+        if (static_cast<HomeMenu::Choice>(choice) == HomeMenu::Choice::GameSettings) {
+            OnConfigurePerGame();
+        } else {
+            OnConfigure();
+        }
+        // Back to the menu, the game still paused
+        if (home_menu != nullptr && emulation_running) {
+            QWidget* over =
+                render_window->isVisible() ? static_cast<QWidget*>(render_window) : this;
+            home_menu->Open(over, HomeMenuGameName(), QtCommon::system->GetExitLocked());
+        }
+        break;
+    }
+    case HomeMenu::Choice::ExitGame:
+        // (Confirmed in the menu itself)
+        CloseHomeMenu(false);
+        StopGameConfirmed();
+        break;
+    }
+}
+
+void MainWindow::CloseHomeMenu(bool resume) {
+    if (home_menu == nullptr) {
+        return;
+    }
+    HomeMenu* menu = std::exchange(home_menu, nullptr);
+    menu->hide();
+    const bool resume_game = resume && std::exchange(home_menu_resume, false);
+    home_menu_resume = false;
+    render_window->setFocus();
+    if (!resume_game) {
+        menu->deleteLater();
+        return;
+    }
+    // Resume once the buttons are let go, so the A that picked Resume doesn't reach the game
+    home_menu_resuming = true;
+    auto* wait = new QTimer(menu);
+    auto ticks = std::make_shared<int>(0);
+    connect(wait, &QTimer::timeout, this, [this, menu, wait, ticks] {
+        if (menu->AnyButtonHeld() && ++*ticks < 60) {
+            return;
+        }
+        wait->stop();
+        home_menu_resuming = false;
+        if (emulation_running && QtCommon::emu_thread && !QtCommon::emu_thread->IsRunning() &&
+            !QtCommon::system->IsShuttingDown()) {
+            OnStartGame();
+        }
+        menu->deleteLater();
+    });
+    wait->start(16);
 }
 
 bool MainWindow::ConfirmShutdownGame() {
@@ -9209,6 +9367,13 @@ void MainWindow::OnConfigure() {
         renderer_status_button->setEnabled(!emulation_running);
     }
 
+    // A running game's players: Controls edits for players without a profile, and profiles
+    // saved or edited in the dialog, take effect now
+    if (emulation_running && !console_profile && !Settings::values.players.UsingGlobal()) {
+        InputProfiles::ApplyGameProfiles(true);
+        QtCommon::system->HIDCore().ReloadInputDevices();
+    }
+
     UpdateStatusButtons();
     controller_dialog->refreshConfiguration();
     QtCommon::system->ApplySettings();
@@ -9392,17 +9557,36 @@ void MainWindow::OnConfigurePerGame() {
     OpenPerGameConfiguration(title_id, current_game_path.toStdString());
 }
 
-void MainWindow::OpenPerGameConfiguration(u64 title_id, const std::string& file_name) {
+void MainWindow::OpenPerGameConfiguration(u64 title_id, const std::string& file_name,
+                                          bool input_profiles_tab) {
     const auto v_file = Core::GetGameFileFromPath(QtCommon::vfs, file_name);
 
     Settings::SetConfiguringGlobal(false);
     ConfigurePerGame dialog(this, title_id, file_name, vk_device_records, *QtCommon::system);
     dialog.LoadFromFile(v_file);
+    if (input_profiles_tab) {
+        dialog.ShowInputProfilesTab();
+    }
 
     const auto result = dialog.exec();
 
+    // Opening the dialog read the game's file into the players. With no game running, the
+    // user's own players come back; the running game gets its input profiles back, with any new
+    // ones (a console mode keeps its own players, and takes new profiles at the game's next start)
+    const auto refresh_running_game = [this, title_id] {
+        if (!QtCommon::system->IsPoweredOn()) {
+            Settings::values.players.SetGlobal(true);
+        } else if (!console_profile &&
+                   QtCommon::system->GetApplicationProcessProgramID() == title_id) {
+            Settings::values.players.SetGlobal(false);
+            InputProfiles::ApplyGameProfiles(true);
+        }
+    };
+
     if (result != QDialog::Accepted && !UISettings::values.configuration_applied) {
+        refresh_running_game();
         Settings::RestoreGlobalState(QtCommon::system->IsPoweredOn());
+        QtCommon::system->HIDCore().ReloadInputDevices();
         return;
     } else if (result == QDialog::Accepted) {
         // A game with its own controller config keeps its own in the file, not the engine's
@@ -9431,6 +9615,8 @@ void MainWindow::OpenPerGameConfiguration(u64 title_id, const std::string& file_
     if (reload) {
         OnGameListRefresh();
     }
+
+    refresh_running_game();
 
     // Do not cause the global config to write local settings into the config file
     const bool is_powered_on = QtCommon::system->IsPoweredOn();

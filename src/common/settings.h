@@ -851,6 +851,10 @@ struct Values {
 #endif
     };
     Setting<bool> controller_navigation{linkage, true, "controller_navigation", Category::Controls};
+    /// Each player's default input profile, comma-separated in player order: used by every game
+    /// that doesn't pick a profile of its own for that player
+    Setting<std::string> default_input_profiles{linkage, std::string{}, "default_input_profiles",
+                                                Category::Controls};
     Setting<bool> enable_joycon_driver{linkage, true, "enable_joycon_driver", Category::Controls};
     Setting<bool> enable_procon_driver{linkage, false, "enable_procon_driver", Category::Controls};
 

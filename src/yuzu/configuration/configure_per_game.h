@@ -66,6 +66,9 @@ public:
 
     void LoadFromFile(FileSys::VirtualFile file_);
 
+    /// Opens on the Input Profiles tab
+    void ShowInputProfilesTab();
+
 private:
     void changeEvent(QEvent* event) override;
     void RetranslateUI();

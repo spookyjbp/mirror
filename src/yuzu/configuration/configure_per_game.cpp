@@ -108,6 +108,10 @@ ConfigurePerGame::ConfigurePerGame(QWidget* parent, u64 title_id_, const std::st
 
 ConfigurePerGame::~ConfigurePerGame() = default;
 
+void ConfigurePerGame::ShowInputProfilesTab() {
+    ui->tabWidget->setCurrentWidget(input_tab.get());
+}
+
 void ConfigurePerGame::ApplyConfiguration() {
     for (const auto tab : *tab_group) {
         tab->ApplyConfiguration();

@@ -94,6 +94,8 @@ add_executable(yuzu
     configuration/configure_input_advanced.ui
     configuration/configure_player_assignment.cpp
     configuration/configure_player_assignment.h
+    configuration/configure_default_profiles.cpp
+    configuration/configure_default_profiles.h
     configuration/configure_input_per_game.cpp
     configuration/configure_input_per_game.h
     configuration/configure_input_per_game.ui
@@ -200,6 +202,8 @@ add_executable(yuzu
     multiplayer/validation.h
     overlay_panel.cpp
     overlay_panel.h
+    home_menu.cpp
+    home_menu.h
     startup_checks.cpp
     startup_checks.h
     set_play_time_dialog.cpp

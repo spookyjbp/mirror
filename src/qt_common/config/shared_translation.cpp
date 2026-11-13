@@ -372,6 +372,10 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "it bypasses such prompts and directly exits the emulation."));
     INSERT(UISettings, hide_mouse, tr("Hide mouse on inactivity"),
            tr("Hides the mouse after 2.5s of inactivity."));
+    INSERT(UISettings, home_button_menu, tr("Home button opens the in-game menu"),
+           tr("Pressing a controller's Home button on its own while a game runs pauses it and "
+              "opens a menu with Settings and Exit Game.\nHome held with another button still "
+              "runs that hotkey."));
     INSERT(UISettings, check_for_updates, tr("Check for updates"),
            tr("Whether or not to check for updates upon startup."));
 

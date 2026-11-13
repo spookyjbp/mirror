@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
 #include <string>
 #include "common/container/unordered_map.h"
@@ -37,6 +38,19 @@ public:
     /// A profile's player values, read without touching the player they are read through
     std::optional<Settings::PlayerInput> PeekProfile(const std::string& profile_name,
                                                      std::size_t player_index);
+
+    /// Each player's default profile ("" none), used by games without a profile of their own
+    static std::array<std::string, 8> GetDefaultProfiles();
+    static void SetDefaultProfiles(const std::array<std::string, 8>& names);
+
+    /**
+     * Gives a starting game its players' input profiles: the game's own profile for a player,
+     * else that player's default profile. Profiles are read from their files, so edits to a
+     * profile reach every game using it.
+     * @param game_config_loaded Whether the game's own config was read (players hold it)
+     * @returns Whether any player took a profile
+     */
+    static bool ApplyGameProfiles(bool game_config_loaded);
 
 private:
     bool ProfileExistsInMap(const std::string& profile_name) const;

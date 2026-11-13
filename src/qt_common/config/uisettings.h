@@ -127,6 +127,13 @@ struct Values {
     Setting<bool> hide_mouse{
         linkage, true, "hideInactiveMouse", Category::UiGeneral, Settings::Specialization::Default,
         true,    true};
+    Setting<bool> home_button_menu{linkage,
+                                   true,
+                                   "homeButtonMenu",
+                                   Category::UiGeneral,
+                                   Settings::Specialization::Default,
+                                   true,
+                                   true};
     // Set when Vulkan is known to crash the application
     bool has_broken_vulkan = false;
 
