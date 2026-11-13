@@ -267,6 +267,7 @@ bool InputProfiles::ApplyGameProfiles(bool game_config_loaded) {
             }
             continue;
         }
+        player.controller_type = read->controller_type;
         player.buttons = read->buttons;
         player.analogs = read->analogs;
         player.motions = read->motions;

@@ -148,14 +148,10 @@ void Config::ReadPlayerValues(const std::size_t player_index) {
     }
 
     if (player_prefix.empty() && Settings::IsConfiguringGlobal()) {
-        const auto controller = Settings::ControllerType(
+        // An input profile brings its controller type with its mappings
+        player.controller_type = Settings::ControllerType(
             ReadIntegerSetting(std::string(player_prefix).append("type"),
                                u8(Settings::ControllerType::ProController)));
-
-        if (controller == Settings::ControllerType::LeftJoycon ||
-            controller == Settings::ControllerType::RightJoycon) {
-            player.controller_type = controller;
-        }
     } else {
         if (global) {
             auto& player_global = Settings::values.players.GetValue(true)[player_index];
