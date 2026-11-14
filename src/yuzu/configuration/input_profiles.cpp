@@ -272,12 +272,19 @@ bool InputProfiles::ApplyGameProfiles(bool game_config_loaded) {
         player.analogs = read->analogs;
         player.motions = read->motions;
         player.profile_name = name;
+        // A player given a profile is in use
+        player.connected = true;
         applied = true;
         LOG_INFO(Config, "Player {} uses {} input profile `{}`", i + 1,
                  own ? "the game's" : "the default", name);
 
-        if (i == 0 && player.controller_type == Settings::ControllerType::Handheld) {
-            game[HANDHELD_INDEX] = player;
+        if (i == 0) {
+            // Player 1 is the handheld controller or not, as for a type change in Controls
+            if (player.controller_type == Settings::ControllerType::Handheld) {
+                game[HANDHELD_INDEX] = player;
+            } else {
+                game[HANDHELD_INDEX].connected = false;
+            }
         }
     }
     return applied;
